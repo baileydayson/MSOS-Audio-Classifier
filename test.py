@@ -40,6 +40,7 @@ def statistics(input):
 
 thirdoctfreqs = _genfreqs([20, 20000], fraction=3, fs=44100)[0]
 
+PIANO_KEYS = [32.70, 34.65, 36.71, 38.89, 41.20, 43.65, 46.25, 49, 51.91, 55, 58.27, 61.74, 65.41, 69.3, 73.42, 77.78, 82.41, 87.31, 92.5, 98, 103.83, 110, 116.54, 123.47, 130.81, 138.59, 146.83, 155.56, 164.81, 174.61, 185, 196, 207.65, 220, 233.08, 246.94, 261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392, 415.3, 440, 466.16, 493.88, 523.25, 554.37, 587.33, 622.25, 659.25, 698.46, 739.99, 783.99, 830.61, 880, 932.33, 987.77, 1046.5, 1108.73, 1174.66, 1244.51, 1318.51, 1396.91,1479.98, 1567.98, 1661.22, 1760, 1864.66, 1975.53, 2093, 2217.46, 2349.32, 2489.02, 2637.02, 2793.83, 2959.96, 3135.96, 3322.44, 3520, 3729.31, 3951.07, 4186.01, 4434.92, 4698.63, 4978.03, 5274.04, 5587.65, 5919.91, 6271.93, 6644.88, 7040, 7458.62, 7902.13]
 
 def extract_feature_from_file(path_to_file: Union[str, Path]):
     plain_sig, fs = librosa.load(path_to_file, sr=None)
@@ -53,8 +54,21 @@ def extract_feature_from_file(path_to_file: Union[str, Path]):
     cohere = coherence(trim_sig,noise,fs)
     envelope = np.abs(hilbert(trim_sig))
     third_spl, third_freq = octavefilter(trim_sig, fs, fraction=3, order=4, limits=[20, 20000], show=0, sigbands=0)
+    real_fft = np.abs(np.fft.rfft(trim_sig, 65536))
+    fft_freqs = np.linspace(0, 22050, len(real_fft), True)
+    harmonic_energy = 0
+    anharmonic_energy = 0
+    for frequency, value in zip(fft_freqs[:20000], real_fft[:20000]):
+        for harmonic_freq in PIANO_KEYS:
+            if 1.02*harmonic_freq > frequency > 0.98*harmonic_freq:
+                harmonic_energy += value
+            else:
+                anharmonic_energy += value
+    total_harmonic_energy = (harmonic_energy/np.sum(real_fft))*100
+    high_freq_energy = np.sum(real_fft[20000:])/np.sum(real_fft)
 
-    return {'waveform': {"plot": trim_sig, "stats": statistics(trim_sig)}, 'rms': {"plot": rms, "stats": statistics(rms)}, 'zcr': {"plot": zcr, "stats": statistics(zcr)}, 'stft': stft, 'mfcc': librosa.power_to_db(mfcc, ref=np.max), 'noiselike': {"plot": cohere[1], "stats": statistics(cohere[1])}, 'envelope': {"plot": envelope, "stats": statistics(envelope)},'third_octave':{'plot':third_spl, 'stats': statistics(third_spl)}}
+
+    return {'waveform': {"plot": trim_sig, "stats": statistics(trim_sig)}, 'rms': {"plot": rms, "stats": statistics(rms)}, 'zcr': {"plot": zcr, "stats": statistics(zcr)}, 'stft': stft, 'mfcc': librosa.power_to_db(mfcc, ref=np.max), 'noiselike': {"plot": cohere[1], "stats": statistics(cohere[1])}, 'envelope': {"plot": envelope, "stats": statistics(envelope)},'third_octave':{'plot':third_spl, 'stats': statistics(third_spl)}, 'fft':{'plot':real_fft, 'stats': statistics(real_fft), 'harmonic_energy': total_harmonic_energy}}
 
 @st.cache_data
 def injest():
@@ -110,6 +124,15 @@ with st.expander("Macro-statistics"):
                     meanchart = np.mean(meanchart, axis=1)
                     meanchart = pd.DataFrame({'x': thirdoctfreqs, 'mean': meanchart})
                     st.line_chart(meanchart, x='x')
+
+    harmonic_array = []
+    for file in category_file_keys:
+        file_selected = data_dict[select_dev_category][file]
+        harmonic_array.append(file_selected['fft']['harmonic_energy'])
+    st.write(np.mean(harmonic_array))
+    st.write(np.min(harmonic_array))
+    st.write(np.max(harmonic_array))
+
 
 
 #min
@@ -175,3 +198,10 @@ with st.expander("Statistics"):
     third_plot = file_selected[file_selected_keys[7]]['plot']
     st.line_chart(third_plot)
     st.write(file_selected[file_selected_keys[7]]["stats"])
+
+    st.subheader("FFT")
+    fft_plot = file_selected[file_selected_keys[8]]['plot']
+    fft_plot = pd.DataFrame({'x': np.linspace(0, 22050, len(fft_plot), True), 'y': fft_plot})
+    st.line_chart(fft_plot, x='x')
+    st.write(file_selected[file_selected_keys[8]]["harmonic_energy"])
+    st.write(file_selected[file_selected_keys[8]]["stats"])
