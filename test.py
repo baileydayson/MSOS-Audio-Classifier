@@ -1,15 +1,11 @@
 import librosa
 import numpy as np
-import Signal_Analysis.features.signal
-import matplotlib.pyplot as plt
 import time
 from typing import Union
 from pathlib import Path
-from hmmlearn import hmm
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-import scipy
 from scipy.stats import kurtosis
 from scipy.stats import skew, mode, iqr
 from scipy.signal import coherence, hilbert
@@ -58,14 +54,13 @@ def extract_feature_from_file(path_to_file: Union[str, Path]):
     fft_freqs = np.linspace(0, 22050, len(real_fft), True)
     harmonic_energy = 0
     anharmonic_energy = 0
-    for frequency, value in zip(fft_freqs[:20000], real_fft[:20000]):
+    for frequency, value in zip(fft_freqs[:16000], real_fft[:16000]):
         for harmonic_freq in PIANO_KEYS:
             if 1.02*harmonic_freq > frequency > 0.98*harmonic_freq:
                 harmonic_energy += value
             else:
                 anharmonic_energy += value
     total_harmonic_energy = (harmonic_energy/np.sum(real_fft))*100
-    high_freq_energy = np.sum(real_fft[20000:])/np.sum(real_fft)
 
 
     return {'waveform': {"plot": trim_sig, "stats": statistics(trim_sig)}, 'rms': {"plot": rms, "stats": statistics(rms)}, 'zcr': {"plot": zcr, "stats": statistics(zcr)}, 'stft': stft, 'mfcc': librosa.power_to_db(mfcc, ref=np.max), 'noiselike': {"plot": cohere[1], "stats": statistics(cohere[1])}, 'envelope': {"plot": envelope, "stats": statistics(envelope)},'third_octave':{'plot':third_spl, 'stats': statistics(third_spl)}, 'fft':{'plot':real_fft, 'stats': statistics(real_fft), 'harmonic_energy': total_harmonic_energy}}
@@ -107,6 +102,7 @@ with st.expander("Macro-statistics"):
                 if method != 'plot':
                     st.write(method)
                     try:
+                        master_stats_dict[data_type][method].sort()
                         st.scatter_chart(master_stats_dict[data_type][method])
                     except TypeError as exc:
                         pass
@@ -132,6 +128,8 @@ with st.expander("Macro-statistics"):
     st.write(np.mean(harmonic_array))
     st.write(np.min(harmonic_array))
     st.write(np.max(harmonic_array))
+    harmonic_array.sort()
+    st.scatter_chart(harmonic_array)
 
 
 
